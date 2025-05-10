@@ -6,62 +6,50 @@ app = Flask(__name__)
 
 DB_PATH = 'final_carwash_complete.db'
 
-def handle_cam_feed(table_name, lp, scan_time):
-    # Get timestamps
-    now = datetime.now()
-    created_on = now.date().isoformat()
-    created_at = now.time().strftime('%H:%M:%S')
+@app.route('/cam1', methods=['POST'])
+def cam1_webhook():
+    try:
+        data = request.get_json()
 
-    # Connect to DB
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+        lp = data.get('LP')
+        scan_time = data.get('scan_time')
 
-    # Create the table if it doesn't exist
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            LP TEXT UNIQUE,
-            scan_time TEXT,
-            Created_on DATE,
-            Created_at TIME
-        )
-    ''')
+        if not lp or not scan_time:
+            return jsonify({"error": "Missing LP or scan_time"}), 400
 
-    # Insert data
-    cursor.execute(f'''
-        INSERT OR IGNORE INTO {table_name} (LP, scan_time, Created_on, Created_at)
-        VALUES (?, ?, ?, ?)
-    ''', (lp, scan_time, created_on, created_at))
+        # Get current date and time
+        now = datetime.now()
+        created_on = now.date().isoformat()
+        created_at = now.time().strftime('%H:%M:%S')
 
-    conn.commit()
-    conn.close()
+        # Connect to the database
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
 
+        # Create the Cam1 table if it doesn't exist
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Cam1 (
+                LP TEXT UNIQUE,
+                scan_time TEXT,
+                Created_on DATE,
+                Created_at TIME
+            )
+        ''')
 
-# Shared handler function
-def create_cam_endpoint(table_name):
-    def endpoint():
-        try:
-            data = request.get_json()
-            lp = data.get('LP')
-            scan_time = data.get('scan_time')
+        # Insert data into the Cam1 table
+        cursor.execute('''
+            INSERT OR IGNORE INTO Cam1 (LP, scan_time, Created_on, Created_at)
+            VALUES (?, ?, ?, ?)
+        ''', (lp, scan_time, created_on, created_at))
 
-            if not lp or not scan_time:
-                return jsonify({"error": "Missing LP or scan_time"}), 400
+        conn.commit()
+        conn.close()
 
-            handle_cam_feed(table_name, lp, scan_time)
-            return jsonify({"status": "success"}), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    return endpoint
+        return jsonify({"status": "success"}), 200
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# Register endpoints
-app.route('/cam1', methods=['POST'])(create_cam_endpoint('Cam1'))
-app.route('/cam2', methods=['POST'])(create_cam_endpoint('Cam2'))
-app.route('/cam3', methods=['POST'])(create_cam_endpoint('Cam3'))
-app.route('/cam4', methods=['POST'])(create_cam_endpoint('Cam4'))
-app.route('/cam5', methods=['POST'])(create_cam_endpoint('Cam5'))
-
-
-# Run locally
+# Run the Flask app
 if __name__ == '__main__':
     app.run(debug=True)
